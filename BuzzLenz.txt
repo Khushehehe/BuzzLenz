@@ -1,0 +1,100 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <UbidotsESPMQTT.h>
+
+#define IR_SENSOR_PIN 4
+#define BUZZER_PIN 18
+
+#define ssid  "realme12"
+#define password "ashu1234"
+#define apiKey  "AIzaSyDXukze0ajBBLpdC_UiuM63rxDJP9IHXvk" // Google API Key
+#define TOKEN "BBUS-igfy01RLC8rVyDT7ebJUShDGM4eMav"  // Ubidots API Token
+#define device_label "buzzlenz"
+
+Ubidots client(TOKEN);
+float lat = 0.0, lon = 0.0;
+unsigned long blinkStartTime = 0;
+unsigned long lastGeolocationUpdate = 0;
+unsigned long lastUbidotsUpdate = 0;
+
+bool mqttConnected = false;
+
+void setup() {
+    Serial.begin(115200);
+    pinMode(IR_SENSOR_PIN, INPUT);
+    pinMode(BUZZER_PIN, OUTPUT);
+    digitalWrite(BUZZER_PIN, LOW);
+
+    // Start WiFi connection without blocking
+    WiFi.begin(ssid, password);
+    Serial.println("Connecting to WiFi...");
+}
+
+void connectMQTT() {
+    if (WiFi.status() == WL_CONNECTED && !mqttConnected) {
+        Serial.println("Connecting to Ubidots MQTT...");
+        client.wifiConnection(ssid, password);
+        client.ubidotsSetBroker("things.ubidots.com");
+        client.setDebug(true);
+        client.begin(NULL);
+        mqttConnected = true;
+    }
+}
+
+void getGeolocation() {
+    if (WiFi.status() == WL_CONNECTED) { 
+        HTTPClient http;
+        String url = "https://www.googleapis.com/geolocation/v1/geolocate?key=" + String(apiKey);
+        http.begin(url);
+        http.addHeader("Content-Type", "application/json");
+        int httpCode = http.POST("{}");
+        
+        if (httpCode > 0) {
+            String payload = http.getString();
+            StaticJsonDocument<512> doc;
+            deserializeJson(doc, payload);
+            lat = doc["location"]["lat"];
+            lon = doc["location"]["lng"];
+            Serial.print("Latitude: "); Serial.println(lat, 6);
+            Serial.print("Longitude: "); Serial.println(lon, 6);
+        } else {
+            Serial.println("Error getting location.");
+        }
+        http.end();
+    }
+}
+
+void loop() {
+    // --- 1. Buzzer Logic (Always Runs First) ---
+    if (digitalRead(IR_SENSOR_PIN) == HIGH) {
+        if (blinkStartTime == 0) blinkStartTime = millis();
+        if (millis() - blinkStartTime >= 1500) digitalWrite(BUZZER_PIN, HIGH);
+    } else {
+        blinkStartTime = 0;
+        digitalWrite(BUZZER_PIN, LOW);
+    }
+
+    delay(50); // Prevent CPU overload
+
+    // --- 2. WiFi & Ubidots Connection (Non-Blocking) ---
+    if (WiFi.status() == WL_CONNECTED) {
+        connectMQTT(); // Ensure MQTT connects only once
+
+        if (millis() - lastGeolocationUpdate >= 10000) {
+            getGeolocation();
+            lastGeolocationUpdate = millis();
+        }
+
+        if (millis() - lastUbidotsUpdate >= 10000) {
+            client.add("lat", lat);
+            client.add("lon", lon);
+            client.ubidotsPublish(device_label);
+            lastUbidotsUpdate = millis();
+        }
+
+        client.loop();  // Maintain Ubidots connection
+    } else {
+        mqttConnected = false; // Reset MQTT connection if WiFi is lost
+    }
+}
