@@ -1,10 +1,10 @@
-## **BuzzLens - Hackathon Project** 🚀  
+## **BuzzLenz - Hackathon Project** 🚀  
 
 ### **Overview**  
-BuzzLens is a smart glasses project designed to enhance driver safety using real-time alerts and GPS tracking. The system detects drowsiness and notifies the driver while also sharing location data via Ubidots.
+BuzzLenz is a smart glasses project designed to enhance driver safety using real-time alerts and GPS tracking. The system detects drowsiness and notifies the driver while also sharing location data via Ubidots.
 
 ## 📂 Folder Structure  
-/BuzzLens
+/BuzzLenz
  ├── main.cpp              # ESP32 Code for the project
  ├── platformio.ini        # PlatformIO configuration file
  ├── README.md             # Project documentation
